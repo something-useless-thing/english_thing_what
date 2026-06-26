@@ -1,7 +1,7 @@
 import { appStore, saveScore } from '../stores/store.js'
 import { PASSAGES } from '../data/passages.js'
 
-let blanks={}, activeId=null, unit=1, blankPct=5
+let blanks={}, activeId=null, unit=1, blankPct=5, debounceTimer=null
 
 export function renderPassage(root) { unit=1; blankPct=5; mount(root) }
 
@@ -85,7 +85,10 @@ function mount(root) {
   root.querySelector('#u1').addEventListener('click', ()=>{ unit=1; buildPassage(root) })
   root.querySelector('#u2').addEventListener('click', ()=>{ unit=2; buildPassage(root) })
   root.querySelector('#grade-btn').addEventListener('click', ()=>gradePassage(root))
-  root.querySelector('#reshuffle-btn').addEventListener('click', ()=>buildPassage(root))
+  root.querySelector('#reshuffle-btn').addEventListener('click', ()=>{
+    clearTimeout(debounceTimer)
+    debounceTimer = setTimeout(()=>requestAnimationFrame(()=>buildPassage(root)), 150)
+  })
   root.querySelector('#blank-submit').addEventListener('click', ()=>submitBlank(root))
   root.querySelector('#blank-close').addEventListener('click', ()=>closeBar(root))
   root.querySelector('#blank-input').addEventListener('keydown', e=>{ if(e.key==='Enter') submitBlank(root) })
@@ -93,11 +96,17 @@ function mount(root) {
   const slider = root.querySelector('#pct-slider')
   slider.addEventListener('input', ()=>{
     blankPct = Number(slider.value)
-    updateLabel(root)  // 숫자만 업데이트
+    updateLabel(root)  // 숫자만 즉시 업데이트
+    // 디바운스: 슬라이더 멈추고 400ms 후에 재생성
+    clearTimeout(debounceTimer)
+    debounceTimer = setTimeout(()=>{
+      requestAnimationFrame(()=>buildPassage(root))
+    }, 400)
   })
   slider.addEventListener('change', ()=>{
     blankPct = Number(slider.value)
-    buildPassage(root)  // 손 놓으면 재생성 + 새로 섞기
+    clearTimeout(debounceTimer)
+    requestAnimationFrame(()=>buildPassage(root))
   })
 
   buildPassage(root)
