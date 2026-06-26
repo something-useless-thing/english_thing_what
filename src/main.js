@@ -19,8 +19,8 @@ const PAGES = {
 }
 
 function render(state) {
-  const fn = PAGES[state.screen] || renderMain
   app.innerHTML = ''
+  const fn = PAGES[state.screen] || renderMain
   fn(app)
 }
 

@@ -1,4 +1,4 @@
-function createStore(initial) {
+export function createStore(initial) {
   let state = { ...initial }
   const listeners = new Set()
   return {
