@@ -6,6 +6,7 @@ import { renderPassage } from './pages/Passage.js'
 import { renderGrammar } from './pages/Grammar.js'
 import { renderConcept } from './pages/Concept.js'
 import { renderRanking } from './pages/Ranking.js'
+import { renderComprehensive } from './pages/Comprehensive.js'
 
 const app = document.getElementById('app')
 
@@ -16,6 +17,7 @@ const PAGES = {
   grammar: renderGrammar,
   concept: renderConcept,
   ranking: renderRanking,
+  comprehensive: renderComprehensive,
 }
 
 function render(state) {

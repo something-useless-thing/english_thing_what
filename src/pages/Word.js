@@ -1,165 +1,118 @@
 import { appStore, saveScore, shuffle } from '../stores/store.js'
 import { WORDS } from '../data/words.js'
 
-let unit = 1
-let mode = 'flash'
-let cards = []
-let cardIdx = 0
-let quizWords = []
-let quizIdx = 0
-let correct = 0
-let wrong = 0
-let answered = false
+let st = {}
+function init() { st = { unit:1, mode:'flash', list:[], idx:0, flipped:false, correct:0, wrong:0 } }
+function getList(u) { return shuffle(u===0?[...WORDS[1],...WORDS[2]]:[...WORDS[u]]) }
 
-export function renderWord(root) {
-  unit = 1
-  mode = 'flash'
-  mount(root)
-}
+export function renderWord(root) { init(); st.list=getList(1); mount(root) }
 
 function mount(root) {
   root.innerHTML = `
     <div style="display:flex;flex-direction:column;min-height:100vh">
       <nav class="top-nav">
         <button class="btn-back" id="back">←</button>
-        <span class="nav-title">단어 퀴즈</span>
+        <span class="nav-title">단어 맞추기</span>
       </nav>
       <div class="screen" style="padding-top:.8rem">
-        <div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:.8rem">
-          <button class="tab-btn" id="u1">1과</button>
-          <button class="tab-btn" id="u2">2과</button>
-          <div style="margin-left:auto;display:flex;gap:6px">
-            <button class="tab-btn" id="m-flash">🃏 플래시카드</button>
-            <button class="tab-btn" id="m-quiz">📝 퀴즈</button>
-          </div>
+        <div style="display:flex;gap:6px;margin-bottom:.7rem" id="unit-tabs">
+          <button class="tab-btn active" data-unit="1">1과</button>
+          <button class="tab-btn" data-unit="2">2과</button>
+          <button class="tab-btn" data-unit="0">전체</button>
         </div>
-        <div id="word-body"></div>
+        <div style="display:flex;gap:6px;margin-bottom:1.2rem;flex-wrap:wrap" id="mode-tabs">
+          <button class="tab-btn active" data-mode="flash">🃏 플래시카드</button>
+          <button class="tab-btn" data-mode="quiz-ko">🇰🇷→🇺🇸 한→영</button>
+          <button class="tab-btn" data-mode="quiz-en">🇺🇸→🇰🇷 영→한</button>
+        </div>
+        <div id="word-content"></div>
       </div>
     </div>`
-
-  root.querySelector('#back').addEventListener('click', () => appStore.set({ screen: 'main' }))
-  root.querySelector('#u1').addEventListener('click', () => { unit = 1; switchMode(root) })
-  root.querySelector('#u2').addEventListener('click', () => { unit = 2; switchMode(root) })
-  root.querySelector('#m-flash').addEventListener('click', () => { mode = 'flash'; switchMode(root) })
-  root.querySelector('#m-quiz').addEventListener('click', () => { mode = 'quiz'; switchMode(root) })
-
-  switchMode(root)
+  root.querySelector('#back').addEventListener('click', () => appStore.set({ screen:'main' }))
+  root.querySelectorAll('#unit-tabs .tab-btn').forEach(btn => btn.addEventListener('click', () => {
+    st.unit=Number(btn.dataset.unit); st.list=getList(st.unit); st.idx=0; st.flipped=false; st.correct=0; st.wrong=0
+    root.querySelectorAll('#unit-tabs .tab-btn').forEach(b=>b.classList.toggle('active',b===btn))
+    renderContent(root)
+  }))
+  root.querySelectorAll('#mode-tabs .tab-btn').forEach(btn => btn.addEventListener('click', () => {
+    st.mode=btn.dataset.mode; st.idx=0; st.flipped=false; st.correct=0; st.wrong=0; st.list=getList(st.unit)
+    root.querySelectorAll('#mode-tabs .tab-btn').forEach(b=>b.classList.toggle('active',b===btn))
+    renderContent(root)
+  }))
+  renderContent(root)
 }
 
-function switchMode(root) {
-  root.querySelector('#u1').classList.toggle('active', unit === 1)
-  root.querySelector('#u2').classList.toggle('active', unit === 2)
-  root.querySelector('#m-flash').classList.toggle('active', mode === 'flash')
-  root.querySelector('#m-quiz').classList.toggle('active', mode === 'quiz')
-
-  if (mode === 'flash') startFlash(root)
-  else startQuiz(root)
+function renderContent(root) {
+  const el = root.querySelector('#word-content')
+  el.innerHTML = st.mode==='flash' ? flashHTML() : quizHTML()
+  bindContent(root)
 }
 
-function startFlash(root) {
-  cards = shuffle([...WORDS[unit]])
-  cardIdx = 0
-  renderFlash(root)
-}
-
-function renderFlash(root) {
-  const body = root.querySelector('#word-body')
-  const w = cards[cardIdx]
-  body.innerHTML = `
-    <div class="progress-text">${cardIdx + 1} / ${cards.length}</div>
-    <div class="flashcard-wrap" id="fc">
-      <div class="flashcard-inner" id="fc-inner">
-        <div class="flashcard-face front">
-          <div>${w.en}</div>
-          <div class="flashcard-hint">클릭해서 뜻 보기</div>
-        </div>
-        <div class="flashcard-face back">
-          <div>${w.ko}</div>
-          <div class="flashcard-hint">${w.en}</div>
-        </div>
+function flashHTML() {
+  const w = st.list[st.idx]
+  return `
+    <div class="progress-text">${st.idx+1} / ${st.list.length}</div>
+    <div class="flashcard-wrap" id="fc-wrap">
+      <div class="flashcard-inner ${st.flipped?'flipped':''}" id="fc-inner">
+        <div class="flashcard-face front">${w.en}<div class="fc-hint">클릭해서 뒤집기</div></div>
+        <div class="flashcard-face back">${w.ko}</div>
       </div>
     </div>
-    <div style="display:flex;gap:8px;margin-top:1rem;justify-content:center">
-      <button class="btn btn-secondary" id="prev" ${cardIdx === 0 ? 'disabled' : ''}>이전</button>
-      <button class="btn btn-secondary" id="reshuffle">셔플</button>
-      <button class="btn btn-primary" id="next" ${cardIdx === cards.length - 1 ? 'disabled' : ''}>다음</button>
+    <div style="display:flex;gap:10px;justify-content:center;margin-top:1.2rem">
+      <button class="btn btn-secondary" id="fc-prev">← 이전</button>
+      <button class="btn btn-secondary" id="fc-shuffle">🔀 섞기</button>
+      <button class="btn btn-primary" id="fc-next">다음 →</button>
     </div>`
-
-  body.querySelector('#fc').addEventListener('click', () =>
-    body.querySelector('#fc-inner').classList.toggle('flipped'))
-  body.querySelector('#prev').addEventListener('click', () => { cardIdx--; renderFlash(root) })
-  body.querySelector('#next').addEventListener('click', () => { cardIdx++; renderFlash(root) })
-  body.querySelector('#reshuffle').addEventListener('click', () => startFlash(root))
 }
 
-function startQuiz(root) {
-  quizWords = shuffle([...WORDS[unit]])
-  quizIdx = 0
-  correct = 0
-  wrong = 0
-  answered = false
-  renderQuiz(root)
-}
-
-function renderQuiz(root) {
-  if (quizIdx >= quizWords.length) { renderQuizResult(root); return }
-
-  const body = root.querySelector('#word-body')
-  const w = quizWords[quizIdx]
-  const others = shuffle(WORDS[unit].filter(x => x.en !== w.en)).slice(0, 3)
-  const options = shuffle([w, ...others])
-  answered = false
-
-  body.innerHTML = `
+function quizHTML() {
+  if (st.idx >= st.list.length) {
+    const score = Math.round((st.correct/st.list.length)*100)
+    saveScore('word', score)
+    return `<div class="result-screen"><div class="result-score">${score}점</div><div class="result-label">${st.correct}개 정답 / ${st.list.length}개</div><button class="btn btn-primary" id="retry">다시 풀기</button></div>`
+  }
+  const w=st.list[st.idx], isKo=st.mode==='quiz-ko'
+  return `
     <div class="score-row">
-      <div class="score-chip"><span class="c">${correct}</span>맞음</div>
-      <div class="score-chip"><span class="w">${wrong}</span>틀림</div>
+      <div class="score-chip"><span class="c">${st.correct}</span>정답</div>
+      <div class="score-chip"><span class="w">${st.wrong}</span>오답</div>
+      <div class="score-chip"><span class="r">${st.list.length-st.idx}</span>남음</div>
     </div>
-    <div class="progress-text">${quizIdx + 1} / ${quizWords.length}</div>
-    <div class="card" style="margin-bottom:1rem;text-align:center">
-      <div style="font-size:1.4rem;font-weight:700;padding:.5rem 0">${w.en}</div>
-    </div>
-    <div class="mc-options" id="opts">
-      ${options.map((o, i) => `
-        <button class="mc-opt" data-ko="${o.ko}">
-          <span class="opt-num">${i + 1}.</span>${o.ko}
-        </button>`).join('')}
-    </div>
-    <div id="fb"></div>
-    <div style="text-align:right;margin-top:.8rem">
-      <button class="btn btn-primary" id="next-q" style="display:none">다음 →</button>
+    <div class="card">
+      <div class="progress-text">${st.idx+1} / ${st.list.length}</div>
+      <div style="font-size:1.3rem;font-weight:700;text-align:center;min-height:52px;margin-bottom:1rem;display:flex;align-items:center;justify-content:center">${isKo?w.ko:w.en}</div>
+      <input class="input" id="quiz-input" placeholder="${isKo?'영어로 입력...':'한국어로 입력...'}" autocomplete="off">
+      <div style="display:flex;gap:8px;margin-top:.8rem">
+        <button class="btn btn-primary" id="quiz-check">확인</button>
+        <button class="btn btn-secondary" id="quiz-skip">건너뛰기</button>
+      </div>
+      <div class="feedback" id="quiz-feedback" style="display:none"></div>
     </div>`
-
-  body.querySelectorAll('.mc-opt').forEach(btn => {
-    btn.addEventListener('click', () => {
-      if (answered) return
-      answered = true
-      const ok = btn.dataset.ko === w.ko
-      if (ok) correct++; else wrong++
-
-      body.querySelectorAll('.mc-opt').forEach(b => {
-        b.disabled = true
-        if (b.dataset.ko === w.ko) b.classList.add('correct-opt')
-        else if (b === btn && !ok) b.classList.add('wrong-opt')
-      })
-
-      body.querySelector('#fb').innerHTML =
-        `<div class="feedback ${ok ? 'correct' : 'wrong'}">${ok ? '정답!' : `오답 — 정답: ${w.ko}`}</div>`
-      body.querySelector('#next-q').style.display = 'inline-flex'
-    })
-  })
-
-  body.querySelector('#next-q').addEventListener('click', () => { quizIdx++; renderQuiz(root) })
 }
 
-function renderQuizResult(root) {
-  const score = Math.round((correct / quizWords.length) * 100)
-  saveScore('word', score)
-  root.querySelector('#word-body').innerHTML = `
-    <div class="result-screen">
-      <div class="result-score">${score}</div>
-      <div class="result-label">점 &nbsp;(${correct} / ${quizWords.length} 정답)</div>
-      <button class="btn btn-primary" id="retry">다시 풀기</button>
-    </div>`
-  root.querySelector('#retry').addEventListener('click', () => startQuiz(root))
+function bindContent(root) {
+  const el = root.querySelector('#word-content')
+  el.querySelector('#fc-wrap')?.addEventListener('click', () => { st.flipped=!st.flipped; el.querySelector('#fc-inner')?.classList.toggle('flipped',st.flipped) })
+  el.querySelector('#fc-prev')?.addEventListener('click', () => { st.idx=(st.idx-1+st.list.length)%st.list.length; st.flipped=false; renderContent(root) })
+  el.querySelector('#fc-next')?.addEventListener('click', () => { st.idx=(st.idx+1)%st.list.length; st.flipped=false; renderContent(root) })
+  el.querySelector('#fc-shuffle')?.addEventListener('click', () => { st.list=shuffle(st.list); st.idx=0; st.flipped=false; renderContent(root) })
+  el.querySelector('#retry')?.addEventListener('click', () => { st.correct=0; st.wrong=0; st.idx=0; st.list=getList(st.unit); renderContent(root) })
+  const input=el.querySelector('#quiz-input')
+  const check=()=>{
+    if(!input) return
+    const val=input.value.trim().toLowerCase()
+    if(!val) return
+    const w=st.list[st.idx], ans=(st.mode==='quiz-ko'?w.en:w.ko).toLowerCase()
+    const ok=ans.split(',').map(s=>s.trim()).some(a=>val===a||a.includes(val)||val.includes(a))
+    if(ok)st.correct++;else st.wrong++
+    const fb=el.querySelector('#quiz-feedback')
+    fb.style.display='block'; fb.className=`feedback ${ok?'correct':'wrong'}`
+    fb.textContent=ok?`✓ 정답! ${st.mode==='quiz-ko'?w.en:w.ko}`:`✗ 오답. 정답: ${st.mode==='quiz-ko'?w.en:w.ko}`
+    el.querySelector('#quiz-check').disabled=true; el.querySelector('#quiz-skip').disabled=true; input.disabled=true
+    setTimeout(()=>{st.idx++;renderContent(root)},1300)
+  }
+  input?.addEventListener('keydown',e=>{ if(e.key==='Enter')check() })
+  el.querySelector('#quiz-check')?.addEventListener('click',check)
+  el.querySelector('#quiz-skip')?.addEventListener('click',()=>{st.wrong++;st.idx++;renderContent(root)})
+  setTimeout(()=>input?.focus(),50)
 }

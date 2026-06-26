@@ -13,8 +13,10 @@ export function createStore(initial) {
 
 export const appStore = createStore({ screen: 'main' })
 
+const defaultScores = '{"word":[],"passage":[],"grammar":[],"comprehensive":[]}'
+
 export const rankStore = createStore({
-  scores: JSON.parse(localStorage.getItem('eng_scores') || '{"word":[],"passage":[],"grammar":[]}'),
+  scores: JSON.parse(localStorage.getItem('eng_scores') || defaultScores),
   playerName: localStorage.getItem('eng_name') || '',
 })
 
