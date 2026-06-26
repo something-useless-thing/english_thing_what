@@ -1,11 +1,17 @@
 import { appStore, saveScore } from '../stores/store.js'
 import { PASSAGES } from '../data/passages.js'
 
-let blanks={}, activeId=null, unit=1, blankPct=50
+let blanks={}, activeId=null, unit=1, blankPct=5
 
-export function renderPassage(root) { unit=1; blankPct=50; mount(root) }
+export function renderPassage(root) { unit=1; blankPct=5; mount(root) }
+
+function countWords(text) {
+  // {단어} 제거하고 실제 단어 수 세기
+  return text.replace(/\{[^}]+\}/g, 'X').trim().split(/\s+/).length
+}
 
 function mount(root) {
+  const totalWords = countWords(PASSAGES[1].text)
   root.innerHTML = `
     <div style="display:flex;flex-direction:column;min-height:100vh">
       <nav class="top-nav">
@@ -22,12 +28,12 @@ function mount(root) {
           <button class="tab-btn" id="u2">2단원</button>
         </div>
 
-        <!-- % 슬라이더 -->
+        <!-- % 슬라이더 (전체 단어 기준) -->
         <div style="display:flex;align-items:center;gap:10px;margin-bottom:.9rem;background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:.6rem 1rem">
           <span style="font-size:13px;color:var(--text3);white-space:nowrap">빈칸 비율</span>
-          <input type="range" id="pct-slider" min="10" max="100" step="10" value="${blankPct}"
+          <input type="range" id="pct-slider" min="1" max="30" step="1" value="${blankPct}"
             style="flex:1;accent-color:var(--purple);cursor:pointer">
-          <span id="pct-label" style="font-size:15px;font-weight:700;color:var(--purple-l);min-width:42px;text-align:right">${blankPct}%</span>
+          <span id="pct-label" style="font-size:14px;font-weight:700;color:var(--purple-l);min-width:70px;text-align:right">${blankPct}% (??개)</span>
         </div>
 
         <div style="font-size:12px;color:var(--text3);margin-bottom:.6rem">
@@ -56,19 +62,34 @@ function mount(root) {
 
   const slider = root.querySelector('#pct-slider')
   const label  = root.querySelector('#pct-label')
-
-  // input: 숫자만 업데이트 (아직 재생성 X)
   slider.addEventListener('input', ()=>{
     blankPct = Number(slider.value)
-    label.textContent = blankPct + '%'
+    // 미리보기: 현재 단원 전체 단어 수 기준
+    const tw = countWords(PASSAGES[unit].text)
+    const candidates = getCandidates(PASSAGES[unit].text)
+    const count = calcCount(candidates.length, tw)
+    label.textContent = `${blankPct}% (${count}개)`
   })
-  // change: 손 놓으면 → blankPct 확정 후 새로 랜덤 생성
   slider.addEventListener('change', ()=>{
     blankPct = Number(slider.value)
-    buildPassage(root)  // 여기서 새로 섞음
+    buildPassage(root)
   })
 
   buildPassage(root)
+}
+
+function getCandidates(text) {
+  const candidates = []
+  const re = /\{([^}]+)\}/g
+  let m
+  while((m = re.exec(text)) !== null) candidates.push({ word: m[1], id: candidates.length })
+  return candidates
+}
+
+// 전체 단어 수 기준 %로 빈칸 개수 계산 (빈칸 후보 개수 초과 불가)
+function calcCount(maxCandidates, totalWords) {
+  const byPct = Math.max(1, Math.round(totalWords * blankPct / 100))
+  return Math.min(byPct, maxCandidates)
 }
 
 function buildPassage(root) {
@@ -78,27 +99,18 @@ function buildPassage(root) {
   blanks = {}; activeId = null; closeBar(root)
 
   const text = PASSAGES[unit].text
+  const totalWords = countWords(text)
+  const candidates = getCandidates(text)
+  const count = calcCount(candidates.length, totalWords)
 
-  // 전체 {단어} 출현 목록 (출현 순서대로 id 부여)
-  const candidates = []
-  const re = /\{([^}]+)\}/g
-  let m
-  while((m = re.exec(text)) !== null) {
-    candidates.push({ word: m[1], id: candidates.length })
-  }
-
-  // % → 개수 계산 (최소 1개)
-  const count = Math.max(1, Math.round(candidates.length * blankPct / 100))
+  // 슬라이더 라벨 업데이트
+  const label = root.querySelector('#pct-label')
+  if(label) label.textContent = `${blankPct}% (${count}개)`
 
   // 매번 새로 섞어서 count개 선택 → 단어 자체가 랜덤으로 바뀜
   const shuffled = [...candidates].sort(() => Math.random() - .5)
   const pickedIds = new Set(shuffled.slice(0, count).map(c => c.id))
 
-  // 슬라이더 위에 실제 개수 힌트 표시
-  const label = root.querySelector('#pct-label')
-  if(label) label.textContent = `${blankPct}% (${count}개)`
-
-  // 본문 렌더링
   let occurrence = 0, slotIdx = 0
   const html = text
     .replace(/\{([^}]+)\}/g, (_, word) => {
