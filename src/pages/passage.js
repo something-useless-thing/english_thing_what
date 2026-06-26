@@ -21,18 +21,12 @@ function mount(root) {
           <button class="tab-btn active" id="u1">1단원</button>
           <button class="tab-btn" id="u2">2단원</button>
         </div>
-
-        <!-- 빈칸 개수 설정 -->
         <div style="display:flex;align-items:center;gap:10px;margin-bottom:.9rem;background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:.6rem 1rem">
           <span style="font-size:13px;color:var(--text3);white-space:nowrap">빈칸 개수</span>
-          <input type="range" id="count-slider" min="1" max="20" value="${blankCount}"
-            style="flex:1;accent-color:var(--purple);cursor:pointer">
+          <input type="range" id="count-slider" min="1" max="20" value="${blankCount}" style="flex:1;accent-color:var(--purple);cursor:pointer">
           <span id="count-label" style="font-size:15px;font-weight:700;color:var(--purple-l);min-width:28px;text-align:right">${blankCount}개</span>
         </div>
-
-        <div style="font-size:12px;color:var(--text3);margin-bottom:.6rem">
-          🔵 파란 칸 클릭 → 답 입력 &nbsp;|&nbsp; 🔀 누르면 랜덤 교체
-        </div>
+        <div style="font-size:12px;color:var(--text3);margin-bottom:.6rem">🔵 파란 칸 클릭 → 답 입력 &nbsp;|&nbsp; 🔀 누르면 랜덤 교체</div>
         <div class="passage-box" id="passage-box"></div>
         <div id="passage-result" style="display:none;margin-top:1rem" class="card"></div>
       </div>
@@ -53,43 +47,36 @@ function mount(root) {
   root.querySelector('#blank-close').addEventListener('click', ()=>closeBar(root))
   root.querySelector('#blank-input').addEventListener('keydown', e=>{if(e.key==='Enter')submitBlank(root)})
 
-  // 슬라이더 — 놓을 때 바로 재생성
-  const slider = root.querySelector('#count-slider')
-  const label  = root.querySelector('#count-label')
-  slider.addEventListener('input', ()=>{
-    blankCount = Number(slider.value)
-    label.textContent = blankCount + '개'
-  })
+  const slider=root.querySelector('#count-slider')
+  const label=root.querySelector('#count-label')
+  slider.addEventListener('input', ()=>{ blankCount=Number(slider.value); label.textContent=blankCount+'개' })
   slider.addEventListener('change', ()=>buildPassage(root))
 
   buildPassage(root)
 }
 
 function buildPassage(root) {
-  root.querySelector('#u1').classList.toggle('active', unit===1)
-  root.querySelector('#u2').classList.toggle('active', unit===2)
+  root.querySelector('#u1').classList.toggle('active',unit===1)
+  root.querySelector('#u2').classList.toggle('active',unit===2)
   root.querySelector('#passage-result').style.display='none'
   blanks={}; activeId=null; closeBar(root)
 
-  // 전체 {단어} 후보 수집
   const allWords=[], text=PASSAGES[unit].text
   const re=/\{([^}]+)\}/g; let m
   while((m=re.exec(text))!==null) allWords.push(m[1])
 
-  // 슬라이더 최대값 = 실제 후보 수
-  const slider = root.querySelector('#count-slider')
+  const slider=root.querySelector('#count-slider')
   if(slider){
-    slider.max = allWords.length
-    if(blankCount > allWords.length){ blankCount=allWords.length; slider.value=blankCount; root.querySelector('#count-label').textContent=blankCount+'개' }
+    slider.max=allWords.length
+    if(blankCount>allWords.length){ blankCount=allWords.length; slider.value=blankCount; root.querySelector('#count-label').textContent=blankCount+'개' }
   }
 
-  // 랜덤 blankCount개 선택 (중복 없이)
   const shuffled=[...allWords].sort(()=>Math.random()-.5)
-  const picked=new Set(shuffled.slice(0, blankCount))
+  const picked=new Set(shuffled.slice(0,blankCount))
 
   let id=0
   const html=text
-    .replace(/\{([^}]+)\}/g, (_,word)=>{
+    .replace(/\{([^}]+)\}/g,(_,word)=>{
       if(picked.has(word)){
         const bid=`b${id++}`; blanks[bid]={answer:word,filled:''}
         return `<span class="blank-slot" data-id="${bid}">&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;</span>`
@@ -133,7 +120,10 @@ function gradePassage(root){
   const score=Math.round((correct/total)*100)
   const res=root.querySelector('#passage-result')
   res.style.display='block'
-  res.innerHTML=`<b>채점 결과:</b> ${correct} / ${total} &nbsp;→&nbsp; <b style="color:var(--purple-l)">${score}점</b><br>
-    <span style="font-size:12px;color:var(--text3)">🟢 초록=정답 &nbsp; 🔴 빨강=오답</span>`
+  res.innerHTML=`
+    <b>채점 결과:</b> ${correct} / ${total} &nbsp;→&nbsp; <b style="color:var(--purple-l)">${score}점</b><br>
+    <span style="font-size:12px;color:var(--text3)">🟢 초록=정답 &nbsp; 🔴 빨강=오답</span><br>
+    <button class="btn btn-secondary" id="retry-btn" style="margin-top:.8rem;font-size:13px">🔀 다시 풀기</button>`
+  res.querySelector('#retry-btn').addEventListener('click', ()=>buildPassage(root))
   saveScore('passage',score)
 }
