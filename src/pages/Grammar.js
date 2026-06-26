@@ -183,7 +183,9 @@ function bindQ(root,q){
       if(!val)return
       const ans=(typeof q.answer==='string'?q.answer:'').toLowerCase()
       input.disabled=true; el.querySelector('#gram-check').disabled=true; el.querySelector('#gram-skip').disabled=true
-      showFb(val===ans||ans.includes(val)||val.includes(ans))
+      // 정확히 일치 or '/'로 구분된 복수 정답 중 하나
+      const okAnswers = ans.split('/').map(s=>s.trim())
+      showFb(okAnswers.some(a=>val===a))
     }
     input?.addEventListener('keydown',e=>{if(e.key==='Enter')check()})
     el.querySelector('#gram-check')?.addEventListener('click',check)

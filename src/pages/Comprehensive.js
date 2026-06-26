@@ -200,7 +200,8 @@ function bindQ(root, q) {
       const val=(input?.value||'').trim().toLowerCase()
       if(!val) return
       const ans=(typeof q.answer==='string'?q.answer:'').toLowerCase()
-      const ok=ans.split(',').map(s=>s.trim()).some(a=>val===a||a.includes(val)||val.includes(a))
+      const okAnswers=ans.split(/[,\/]/).map(s=>s.trim())
+      const ok=okAnswers.some(a=>val===a)
       input.disabled=true; el.querySelector('#q-check').disabled=true; el.querySelector('#q-skip').disabled=true
       showFb(ok)
     }
