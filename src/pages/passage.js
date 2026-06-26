@@ -26,7 +26,7 @@ function mount(root) {
           <input type="range" id="count-slider" min="1" max="20" value="${blankCount}" style="flex:1;accent-color:var(--purple);cursor:pointer">
           <span id="count-label" style="font-size:15px;font-weight:700;color:var(--purple-l);min-width:28px;text-align:right">${blankCount}개</span>
         </div>
-        <div style="font-size:12px;color:var(--text3);margin-bottom:.6rem">🔵 파란 칸 클릭 → 답 입력 &nbsp;|&nbsp; 🔀 누르면 랜덤 교체</div>
+        <div style="font-size:12px;color:var(--text3);margin-bottom:.6rem">🔵 파란 칸 클릭 → 답 입력 &nbsp;|&nbsp; 🔀 단어 다시 뽑기</div>
         <div class="passage-box" id="passage-box"></div>
         <div id="passage-result" style="display:none;margin-top:1rem" class="card"></div>
       </div>
@@ -61,48 +61,67 @@ function buildPassage(root) {
   root.querySelector('#passage-result').style.display='none'
   blanks={}; activeId=null; closeBar(root)
 
-  const allWords=[], text=PASSAGES[unit].text
-  const re=/\{([^}]+)\}/g; let m
-  while((m=re.exec(text))!==null) allWords.push(m[1])
+  const text = PASSAGES[unit].text
 
-  const slider=root.querySelector('#count-slider')
-  if(slider){
-    slider.max=allWords.length
-    if(blankCount>allWords.length){ blankCount=allWords.length; slider.value=blankCount; root.querySelector('#count-label').textContent=blankCount+'개' }
+  // {단어}가 있는 위치(인덱스)를 전부 수집
+  // 같은 단어가 여러 번 나와도 각각 별개로 취급
+  const candidates = []
+  const re = /\{([^}]+)\}/g
+  let m, idx = 0
+  while((m = re.exec(text)) !== null) {
+    candidates.push({ word: m[1], matchIndex: m.index, id: idx++ })
   }
 
-  const shuffled=[...allWords].sort(()=>Math.random()-.5)
-  const picked=new Set(shuffled.slice(0,blankCount))
+  // 슬라이더 최대값 조정
+  const slider = root.querySelector('#count-slider')
+  if(slider){
+    slider.max = candidates.length
+    if(blankCount > candidates.length){
+      blankCount = candidates.length
+      slider.value = blankCount
+      root.querySelector('#count-label').textContent = blankCount + '개'
+    }
+  }
 
-  let id=0
-  const html=text
-    .replace(/\{([^}]+)\}/g,(_,word)=>{
-      if(picked.has(word)){
-        const bid=`b${id++}`; blanks[bid]={answer:word,filled:''}
+  // candidates를 섞어서 앞에서 blankCount개만 빈칸으로 선택
+  // → 매번 다른 단어들이 뚫림
+  const shuffled = [...candidates].sort(() => Math.random() - .5)
+  const pickedIds = new Set(shuffled.slice(0, blankCount).map(c => c.id))
+
+  // 본문 렌더링: 선택된 id만 빈칸, 나머지는 그냥 텍스트
+  let slotIdx = 0
+  let occurrenceIdx = 0
+  const html = text
+    .replace(/\{([^}]+)\}/g, (_, word) => {
+      const curId = occurrenceIdx++
+      if(pickedIds.has(curId)){
+        const bid = `b${slotIdx++}`
+        blanks[bid] = { answer: word, filled: '' }
         return `<span class="blank-slot" data-id="${bid}">&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;</span>`
       }
       return word
     })
-    .replace(/\n\n/g,'<br><br>')
+    .replace(/\n\n/g, '<br><br>')
 
-  const box=root.querySelector('#passage-box')
-  box.innerHTML=html
-  box.querySelectorAll('.blank-slot').forEach(s=>s.addEventListener('click',()=>openBar(root,s.dataset.id)))
+  const box = root.querySelector('#passage-box')
+  box.innerHTML = html
+  box.querySelectorAll('.blank-slot').forEach(s =>
+    s.addEventListener('click', ()=>openBar(root, s.dataset.id)))
 }
 
-function openBar(root,id){
-  activeId=id
-  root.querySelector('#blank-bar').style.display='flex'
-  const inp=root.querySelector('#blank-input')
-  inp.value=blanks[id]?.filled||''; inp.focus()
+function openBar(root, id){
+  activeId = id
+  root.querySelector('#blank-bar').style.display = 'flex'
+  const inp = root.querySelector('#blank-input')
+  inp.value = blanks[id]?.filled || ''; inp.focus()
 }
 function submitBlank(root){
-  if(!activeId)return
-  const val=root.querySelector('#blank-input').value.trim()
-  blanks[activeId].filled=val
-  const slot=root.querySelector(`[data-id="${activeId}"]`)
-  slot.textContent=val||'\u00a0\u00a0\u00a0\u00a0\u00a0\u00a0\u00a0\u00a0'
-  slot.classList.toggle('filled',!!val); slot.classList.remove('correct','wrong')
+  if(!activeId) return
+  const val = root.querySelector('#blank-input').value.trim()
+  blanks[activeId].filled = val
+  const slot = root.querySelector(`[data-id="${activeId}"]`)
+  slot.textContent = val || '\u00a0\u00a0\u00a0\u00a0\u00a0\u00a0\u00a0\u00a0'
+  slot.classList.toggle('filled', !!val); slot.classList.remove('correct','wrong')
   closeBar(root)
 }
 function closeBar(root){ root.querySelector('#blank-bar').style.display='none'; activeId=null }
@@ -110,20 +129,21 @@ function closeBar(root){ root.querySelector('#blank-bar').style.display='none'; 
 function gradePassage(root){
   let correct=0, total=Object.keys(blanks).length
   Object.entries(blanks).forEach(([id,d])=>{
-    const slot=root.querySelector(`[data-id="${id}"]`)
-    const ans=d.answer.toLowerCase().trim(), fill=d.filled.toLowerCase().trim()
-    const ok=fill&&(fill===ans||ans.includes(fill)||fill.includes(ans))
+    const slot = root.querySelector(`[data-id="${id}"]`)
+    const ans = d.answer.toLowerCase().trim()
+    const fill = d.filled.toLowerCase().trim()
+    const ok = fill && (fill===ans || ans.includes(fill) || fill.includes(ans))
     slot.classList.remove('filled'); slot.classList.toggle('correct',ok); slot.classList.toggle('wrong',!ok)
-    if(!d.filled)slot.textContent=d.answer
-    if(ok)correct++
+    if(!d.filled) slot.textContent = d.answer
+    if(ok) correct++
   })
-  const score=Math.round((correct/total)*100)
-  const res=root.querySelector('#passage-result')
-  res.style.display='block'
-  res.innerHTML=`
+  const score = Math.round((correct/total)*100)
+  const res = root.querySelector('#passage-result')
+  res.style.display = 'block'
+  res.innerHTML = `
     <b>채점 결과:</b> ${correct} / ${total} &nbsp;→&nbsp; <b style="color:var(--purple-l)">${score}점</b><br>
     <span style="font-size:12px;color:var(--text3)">🟢 초록=정답 &nbsp; 🔴 빨강=오답</span><br>
-    <button class="btn btn-secondary" id="retry-btn" style="margin-top:.8rem;font-size:13px">🔀 다시 풀기</button>`
+    <button class="btn btn-secondary" id="retry-btn" style="margin-top:.8rem;font-size:13px">🔀 다른 단어로 다시 풀기</button>`
   res.querySelector('#retry-btn').addEventListener('click', ()=>buildPassage(root))
-  saveScore('passage',score)
+  saveScore('passage', score)
 }
